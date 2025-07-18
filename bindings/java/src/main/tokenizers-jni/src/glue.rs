@@ -6,7 +6,7 @@ use jni::{JNIEnv};
 use jni::objects::{JObject, JValue, JString, JList};
 use jni::sys::{jint, jobject};
 
-use tokenizers::tokenizer::{PreTokenizer, Model, Decoder};
+use tokenizers::tokenizer::{PreTokenizer,PreTokenizedString, Model, Decoder};
 
 /// Takes a long ptr argument and reinterpret it as (&mut T) instance
 #[inline]
@@ -15,21 +15,9 @@ pub unsafe fn reinterpret_cast<T>(ptr: i64) -> &'static mut T{
 }
 
 
-/// Generic pretokenize method from Pretokenizer trait. Takes a string and return the pretokenized list of string
-pub fn pretokenize(_env: &JNIEnv, pretokenizer: &dyn PreTokenizer, text: &JString) -> Result<Vec<String>, String>{
-    // Convert Java String to Rust String
-    return match _env.get_string(*text) {
-        Ok(s) => match s.to_str() {
-            Ok(s) => Ok(pretokenizer.pre_tokenize(s)),
-            Err(e) => Err(e.description().to_string())
-        },
-        Err(e) => Err("Unable to get string from JNIEnv".to_string())
-    };
-}
-
 /// Generic decode method from Decoder trait. Takes a list of tokens and return the initial string.
 pub fn decode(_env: &JNIEnv, decoder: &dyn Decoder, words: &JObject) -> Result<String, String>{
-    match JList::from_env(&_env, *words){
+    match JList::from_env(_env, words){
         Ok(words) => match words.size(){
             Ok(size_t) => {
                 let mut tokens: Vec<String> = Vec::with_capacity(size_t as usize);

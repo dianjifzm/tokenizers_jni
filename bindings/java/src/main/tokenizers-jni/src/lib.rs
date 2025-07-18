@@ -16,7 +16,7 @@ use tokenizers::pre_tokenizers::whitespace::Whitespace;
 use tokenizers::pre_tokenizers::byte_level::ByteLevel;
 
 use helpers::string_vector_to_arraylist;
-use glue::{decode, pretokenize, reinterpret_cast};
+use glue::{decode, reinterpret_cast};
 
 // Constants
 const NATIVE_ALLOCATION_FAILED_EXCEPTION: &str = "co/huggingface/tokenizers/exceptions/NativeAllocationFailedException";
@@ -77,7 +77,7 @@ pub unsafe extern "system" fn Java_co_huggingface_tokenizers_pretokenizers_White
 //// Byte Level
 #[no_mangle]
 pub extern "system" fn Java_co_huggingface_tokenizers_pretokenizers_ByteLevelPretokenizer_allocate(_env: JNIEnv, _class: JClass, _obj: JObject) -> jlong {
-    return Box::into_raw(Box::new(ByteLevel)) as jlong;
+    return Box::into_raw(Box::new(ByteLevel::default())) as jlong;
 }
 
 #[no_mangle]
