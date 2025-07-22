@@ -11,7 +11,7 @@ const NATIVE_ALLOCATION_FAILED_EXCEPTION: &str = "co/huggingface/tokenizers/exce
 
 
 #[no_mangle]
-pub extern "system" fn Java_co_huggingface_tokenizers_tokenizer_Tokenizer_from_file(mut _env: JNIEnv, _class: JClass, file_path: JString) -> jobject {
+pub extern "system" fn Java_co_huggingface_tokenizers_Tokenizer_from_file(mut _env: JNIEnv, _class: JClass, file_path: JString) -> jobject {
     // 获取文件路径字符串
     let file_path: String = match _env.get_string(&file_path) {
         Ok(path) => path.into(),
@@ -37,7 +37,7 @@ pub extern "system" fn Java_co_huggingface_tokenizers_tokenizer_Tokenizer_from_f
     let handle = Box::into_raw(tokenizer.unwrap()) as jlong;
     
     // 创建 Java Tokenizer 对象
-    match _env.new_object("co/huggingface/tokenizers/tokenizer/Tokenizer", "()V", &[]) {
+    match _env.new_object("co/huggingface/tokenizers/Tokenizer", "()V", &[]) {
         Ok(j_tokenizer) => {
             // 设置 handle 字段
             let _ = _env.set_field(&j_tokenizer, "handle", "J", JValue::Long(handle));
