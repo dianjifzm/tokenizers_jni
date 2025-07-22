@@ -93,7 +93,7 @@ pub unsafe extern "system" fn Java_co_huggingface_tokenizers_Tokenizer_encode(
     // 获取 token IDs
     let ids = encoding.get_ids();
     let tokens = encoding.get_tokens();
-    let _offsets = encoding.get_offsets();
+    let offsets = encoding.get_offsets();
     
     // 创建 Java int 数组存储 token IDs
     let ids_array = match _env.new_int_array(ids.len() as i32) {
@@ -132,10 +132,42 @@ pub unsafe extern "system" fn Java_co_huggingface_tokenizers_Tokenizer_encode(
         let _ = _env.set_object_array_element(&tokens_array, i as i32, &java_string);
     }
     
+    // 创建 Offset 数组
+    let offset_class = match _env.find_class("co/huggingface/tokenizers/Offset") {
+        Ok(cls) => cls,
+        Err(_) => {
+            let _ = _env.throw_new(NATIVE_ALLOCATION_FAILED_EXCEPTION, "Failed to find Offset class");
+            return JObject::null().as_raw();
+        }
+    };
+    
+    let offsets_array = match _env.new_object_array(offsets.len() as i32, &offset_class, JObject::null()) {
+        Ok(arr) => arr,
+        Err(_) => {
+            let _ = _env.throw_new(NATIVE_ALLOCATION_FAILED_EXCEPTION, "Failed to create offsets array");
+            return JObject::null().as_raw();
+        }
+    };
+    
+    for (i, offset) in offsets.iter().enumerate() {
+        let offset_obj = match _env.new_object("co/huggingface/tokenizers/Offset", "(II)V", &[
+            JValue::Int(offset.0 as i32),
+            JValue::Int(offset.1 as i32),
+        ]) {
+            Ok(obj) => obj,
+            Err(_) => {
+                let _ = _env.throw_new(NATIVE_ALLOCATION_FAILED_EXCEPTION, "Failed to create Offset object");
+                return JObject::null().as_raw();
+            }
+        };
+        let _ = _env.set_object_array_element(&offsets_array, i as i32, &offset_obj);
+    }
+    
     // 创建 Encoding 对象
-    match _env.new_object("co/huggingface/tokenizers/Encoding", "([I[Ljava/lang/String;)V", &[
+    match _env.new_object("co/huggingface/tokenizers/Encoding", "([I[Ljava/lang/String;[Lco/huggingface/tokenizers/Offset;)V", &[
         JValue::Object(&JObject::from(ids_array)),
         JValue::Object(&JObject::from(tokens_array)),
+        JValue::Object(&JObject::from(offsets_array)),
     ]) {
         Ok(encoding_obj) => encoding_obj.as_raw(),
         Err(_) => {
