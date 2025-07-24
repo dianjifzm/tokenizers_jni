@@ -19,3 +19,4 @@ lto = true          # 链接时优化
 codegen-units = 1   # 减少代码生成并行度（提升优化效果）
 strip = true        # 自动剥离调试符号（Rust 1.59+）
 panic = "abort"     # 禁用 panic 展开（减少异常处理代码）
+
