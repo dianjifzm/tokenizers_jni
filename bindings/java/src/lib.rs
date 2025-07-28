@@ -11,7 +11,7 @@ const NATIVE_ALLOCATION_FAILED_EXCEPTION: &str = "co/huggingface/tokenizers/exce
 
 
 #[no_mangle]
-pub extern "system" fn Java_co_huggingface_tokenizers_Tokenizer_fromFile(mut _env: JNIEnv, _class: JClass, file_path: JString) -> jobject {
+pub extern "system" fn Java_co_huggingface_tokenizers_NativeTokenizer_fromFile(mut _env: JNIEnv, _class: JClass, file_path: JString) -> jobject {
     // 获取文件路径字符串
     let file_path: String = match _env.get_string(&file_path) {
         Ok(path) => path.into(),
@@ -37,7 +37,53 @@ pub extern "system" fn Java_co_huggingface_tokenizers_Tokenizer_fromFile(mut _en
     let handle = Box::into_raw(tokenizer.unwrap()) as jlong;
     
     // 创建 Java Tokenizer 对象
-    match _env.new_object("co/huggingface/tokenizers/Tokenizer", "()V", &[]) {
+    match _env.new_object("co/huggingface/tokenizers/NativeTokenizer", "()V", &[]) {
+        Ok(j_tokenizer) => {
+            // 设置 handle 字段
+            let _ = _env.set_field(&j_tokenizer, "handle", "J", JValue::Long(handle));
+            return j_tokenizer.as_raw();
+        }
+        Err(_) => {
+            // 如果创建 Java 对象失败，需要释放已分配的内存
+            unsafe {
+                let _ = Box::from_raw(handle as *mut Tokenizer);
+            }
+            let _ = _env.throw_new(NATIVE_ALLOCATION_FAILED_EXCEPTION, "Unable to create Tokenizer object");
+            return JObject::null().as_raw();
+        }
+    }
+}
+
+
+
+#[no_mangle]
+pub extern "system" fn Java_co_huggingface_tokenizers_NativeTokenizer_fromJson(mut _env: JNIEnv, _class: JClass, json: JString) -> jobject {
+    // 获取文件路径字符串
+    let json: String = match _env.get_string(&json) {
+        Ok(path) => path.into(),
+        Err(_) => {
+            let _ = _env.throw_new(NATIVE_ALLOCATION_FAILED_EXCEPTION, "Couldn't get input json");
+            return JObject::null().as_raw();
+        }
+    };
+
+    // 从文件加载 tokenizer
+    let tokenizer: Result<Box<Tokenizer>, String> = match Tokenizer::from_bytes(&json) {
+        Ok(tokenizer) => Ok(Box::new(tokenizer)),
+        Err(e) => Err(format!("Failed to load tokenizer from json: {:?}", e))
+    };
+
+    // 检查是否加载成功
+    if tokenizer.is_err() {
+        let _ = _env.throw_new(NATIVE_ALLOCATION_FAILED_EXCEPTION, "Unable to load Tokenizer from json");
+        return JObject::null().as_raw();
+    }
+
+    // 将 tokenizer 转换为原始指针并存储为 handle
+    let handle = Box::into_raw(tokenizer.unwrap()) as jlong;
+    
+    // 创建 Java Tokenizer 对象
+    match _env.new_object("co/huggingface/tokenizers/NativeTokenizer", "()V", &[]) {
         Ok(j_tokenizer) => {
             // 设置 handle 字段
             let _ = _env.set_field(&j_tokenizer, "handle", "J", JValue::Long(handle));
@@ -56,7 +102,7 @@ pub extern "system" fn Java_co_huggingface_tokenizers_Tokenizer_fromFile(mut _en
 
 // Tokenizer encode 方法
 #[no_mangle]
-pub unsafe extern "system" fn Java_co_huggingface_tokenizers_Tokenizer_encode(
+pub unsafe extern "system" fn Java_co_huggingface_tokenizers_NativeTokenizer_encode(
     mut _env: JNIEnv, 
     _obj: JObject, 
     text: JString
@@ -92,7 +138,6 @@ pub unsafe extern "system" fn Java_co_huggingface_tokenizers_Tokenizer_encode(
     
     // 获取 token IDs
     let ids = encoding.get_ids();
-    let tokens = encoding.get_tokens();
     let offsets = encoding.get_offsets();
     
     // 创建 Java int 数组存储 token IDs
@@ -107,33 +152,9 @@ pub unsafe extern "system" fn Java_co_huggingface_tokenizers_Tokenizer_encode(
     let ids_i32: Vec<i32> = ids.iter().map(|&x| x as i32).collect();
     let _ = _env.set_int_array_region(&ids_array, 0, &ids_i32);
     
-    // 创建 Java String 数组存储 tokens
-    let string_class = match _env.find_class("java/lang/String") {
-        Ok(cls) => cls,
-        Err(_) => {
-            let _ = _env.throw_new(NATIVE_ALLOCATION_FAILED_EXCEPTION, "Failed to find String class");
-            return JObject::null().as_raw();
-        }
-    };
-    
-    let tokens_array = match _env.new_object_array(tokens.len() as i32, &string_class, JObject::null()) {
-        Ok(arr) => arr,
-        Err(_) => {
-            let _ = _env.throw_new(NATIVE_ALLOCATION_FAILED_EXCEPTION, "Failed to create tokens array");
-            return JObject::null().as_raw();
-        }
-    };
-    
-    for (i, token) in tokens.iter().enumerate() {
-        let java_string = match _env.new_string(token) {
-            Ok(s) => s,
-            Err(_) => continue,
-        };
-        let _ = _env.set_object_array_element(&tokens_array, i as i32, &java_string);
-    }
-    
+ 
     // 创建 Offset 数组
-    let offset_class = match _env.find_class("co/huggingface/tokenizers/Offset") {
+    let offset_class = match _env.find_class("co/huggingface/tokenizers/NativeOffset") {
         Ok(cls) => cls,
         Err(_) => {
             let _ = _env.throw_new(NATIVE_ALLOCATION_FAILED_EXCEPTION, "Failed to find Offset class");
@@ -150,7 +171,7 @@ pub unsafe extern "system" fn Java_co_huggingface_tokenizers_Tokenizer_encode(
     };
     
     for (i, offset) in offsets.iter().enumerate() {
-        let offset_obj = match _env.new_object("co/huggingface/tokenizers/Offset", "(II)V", &[
+        let offset_obj = match _env.new_object("co/huggingface/tokenizers/NativeOffset", "(II)V", &[
             JValue::Int(offset.0 as i32),
             JValue::Int(offset.1 as i32),
         ]) {
@@ -164,9 +185,8 @@ pub unsafe extern "system" fn Java_co_huggingface_tokenizers_Tokenizer_encode(
     }
     
     // 创建 Encoding 对象
-    match _env.new_object("co/huggingface/tokenizers/Encoding", "([I[Ljava/lang/String;[Lco/huggingface/tokenizers/Offset;)V", &[
+    match _env.new_object("co/huggingface/tokenizers/NativeEncoding", "([I[Lco/huggingface/tokenizers/NativeOffset;)V", &[
         JValue::Object(&JObject::from(ids_array)),
-        JValue::Object(&JObject::from(tokens_array)),
         JValue::Object(&JObject::from(offsets_array)),
     ]) {
         Ok(encoding_obj) => encoding_obj.as_raw(),
@@ -179,7 +199,7 @@ pub unsafe extern "system" fn Java_co_huggingface_tokenizers_Tokenizer_encode(
 
 // Tokenizer decode 方法
 #[no_mangle]
-pub unsafe extern "system" fn Java_co_huggingface_tokenizers_Tokenizer_decode(
+pub unsafe extern "system" fn Java_co_huggingface_tokenizers_NativeTokenizer_decode(
     mut _env: JNIEnv, 
     _obj: JObject, 
     ids: jintArray
